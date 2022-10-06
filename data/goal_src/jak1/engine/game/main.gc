@@ -694,6 +694,11 @@
       (profiler-instant-event "display-loop-top")
 
       (runMods)
+      
+      ;; remove water blocking dark crystal in dark cave
+      (when (process-by-name "cave-water-3" *active-pool*)
+        (deactivate (process-by-name "cave-water-3" *active-pool*))
+        )
 
       ;; drawing effects to be used in foreground drawing.
       (with-profiler "foreground-effects"
