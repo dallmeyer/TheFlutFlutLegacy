@@ -601,6 +601,7 @@
   (list-sounds)
   (unload-music)
   (set-fps)
+  (set-mirror 201) ;; added
   )
 
 ;; flavors for music
@@ -1030,7 +1031,7 @@
   (sidekick-hint-rounddoor #x23c)
   (sidekick-hint-lurkerm #x23d)
   (sidekick-hint-tower #x23e)
-  
+
   (sidekick-reminder-fish #x240)
 
   (firecanyon-need-cells #x24f)
@@ -1609,6 +1610,36 @@
   (hint-0                       #x1300)
   (hint-511                     #x14ff)
   (speedrunner-mode             #x1500)
+  (cutscene-skips               #x1501)
+  (checkpoint-select            #x1502)
+  (speedrun-options-heading     #x1503)
+  (speedrun-options-warning     #x1504)
+  (speedrun-reset-current-run   #x1505)
+  (speedrun-new-full-game       #x1506)
+  ;; (speedrun-full-game-any       #x1507)
+  ;; (speedrun-full-game-100       #x1508)
+  ;; (speedrun-full-game-nolts     #x1509)
+  ;; (speedrun-full-game-nofcs     #x150a)
+  ;; (speedrun-full-game-orbless   #x150b)
+  ;; (speedrun-full-game-all-flies #x150c)
+  ;; (speedrun-full-game-all-orbs  #x150d)
+  (speedrun-new-individual-level #x150e)
+  (speedrun-il-training          #x150f)
+  (speedrun-il-village1          #x1510)
+  (speedrun-il-beach             #x1511)
+  (speedrun-il-jungle            #x1512)
+  (speedrun-il-misty             #x1513)
+  (speedrun-il-firecanyon        #x1514)
+  (speedrun-il-village2          #x1515)
+  (speedrun-il-sunken            #x1516)
+  (speedrun-il-swamp             #x1517)
+  (speedrun-il-rolling           #x1518)
+  (speedrun-il-ogre              #x1519)
+  (speedrun-il-village3          #x151a)
+  (speedrun-il-snow              #x151b)
+  (speedrun-il-cave              #x151c)
+  (speedrun-il-lavatube          #x151d)
+  (speedrun-il-citadel           #x151e)
 ;; GAME-TEXT-ID ENUM ENDS
   )
 
@@ -3428,6 +3459,17 @@
   :flag-assert         #x900000004
   )
 
+; added
+(defenum sound-mirror-mode
+  :type uint8
+  (normal)
+  (mirrored)
+  )
+
+; added for mirror mode
+(deftype sound-rpc-set-mirror-mode (sound-rpc-cmd)
+  ((mirror sound-mirror-mode)))
+
 (deftype sound-rpc-union (structure)
   ((data              uint32                     20 :offset-assert 0)
    (load-bank         sound-rpc-load-bank            :offset 0)
@@ -3453,6 +3495,7 @@
    (shutdown          sound-rpc-shutdown             :offset 0)
    (list-sounds       sound-rpc-list-sounds          :offset 0)
    (unload-music      sound-rpc-unload-music         :offset 0)
+   (mirror-mode       sound-rpc-set-mirror-mode      :offset 0) ;; added
    )
   :method-count-assert 9
   :size-assert         #x50
@@ -4098,8 +4141,8 @@
 (deftype dma-gif-packet (structure)
   ((dma-vif dma-packet :inline :offset-assert 0)
    (gif     uint64    2       :offset-assert 16) ;; guess
-   (gif0    uint64 :offset 16)
-   (gif1    uint64 :offset 24)
+   (gif0    uint64 :offset 16 :score 1)
+   (gif1    uint64 :offset 24 :score 1)
    (quad    uint128    2       :offset 0)
    )
   :method-count-assert 9
@@ -5088,7 +5131,6 @@
 (define-extern spheres-overlap? (function sphere sphere symbol))
 (define-extern sphere<-vector! (function sphere vector sphere))
 (define-extern sphere<-vector+r! (function sphere vector float sphere))
-(define-extern rand-vu-sphere-point! (function vector float vector)) ;; todo
 
 ;; - Symbols
 
@@ -15749,6 +15791,9 @@
   (memcard-disable-auto-save)
   (memcard-auto-save-disabled)
   (monitor)
+  (checkpoint-select)
+  (speedrun-options)
+  (speedrun-il-options)
 
   ;; the last one!
   (max)
@@ -15781,8 +15826,10 @@
   (aspect-native)
   (button-music)
   (button-flava)
+  (use-random-seed?)
   (cheat-toggle)
   (monitor)
+  (rng-lib)
   )
 
 (defenum game-option-menu
@@ -18887,7 +18934,6 @@
 
 ;; - Unknowns
 
-;;(define-extern sky-base-polygons object) ;; unknown type
 (define-extern sky-base-polygons (inline-array sky-vertex))
 
 
@@ -20963,10 +21009,10 @@
 
 (define-extern target-bonk-event-handler (function process int symbol event-message-block object :behavior target))
 (define-extern target-standard-event-handler (function process int symbol event-message-block object :behavior target))
-(define-extern target-send-attack (function process uint uint int int symbol :behavior target)) ;; i suspect the uints are actually structures/basics
-(define-extern target-attacked (function symbol attack-info process process (state symbol attack-info target) object :behavior target))
+(define-extern target-send-attack (function process uint touching-shapes-entry int int symbol :behavior target)) ;; i suspect the uints are actually structures/basics
+(define-extern target-attacked (function symbol attack-info process touching-shapes-entry (state symbol attack-info target) object :behavior target))
 (define-extern target-apply-tongue (function vector symbol :behavior target))
-(define-extern get-intersect-point (function vector touching-prims-entry control-info process vector))
+(define-extern get-intersect-point (function vector touching-prims-entry control-info touching-shapes-entry vector))
 (define-extern target-powerup-effect (function symbol none :behavior target))
 (define-extern target-shoved (function meters meters process (state object object target) object :behavior target))
 (define-extern target-dangerous-event-handler (function process int symbol event-message-block object :behavior target))
@@ -34942,3 +34988,13 @@
 
 (define-extern cavecrystal-light-control-cavegeyserrock-callback (function (pointer process-drawable) int float object vector none))
 
+;; ----------------------
+;; File - knuth-rand
+;; Source Path - pc/util/knuth-rand.gc
+
+(define-extern mod-rand-next-float (function float))
+(define-extern mod-rand-float-range (function float float float))
+(define-extern mod-rand-percent? (function float symbol))
+(define-extern mod-rand-int-range (function int int int))
+(define-extern mod-rand-int-count (function int int))
+(define-extern mod-rand-sphere-point! (function vector float vector))
